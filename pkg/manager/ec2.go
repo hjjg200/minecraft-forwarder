@@ -1,6 +1,7 @@
 package manager
 
 import (
+    "encoding/json"
     "fmt"
     "net"
     "os"
@@ -19,7 +20,7 @@ const (
 // EC2
 type EC2Manager struct {
     CredentialsPath string `json:"credentialsPath"`
-    InstanceID string `json:"instanceId"`
+    InstanceId string `json:"instanceId"`
     Region string `json:"region"`
     Profile string `json:"profile"`
     Port uint16 `json:"port"`
@@ -29,15 +30,27 @@ type EC2Manager struct {
     lock sync.Mutex
 }
 
-func NewEC2Manager(cp, id, rg, pf string, p uint16, to int) *EC2Manager {
+func newEC2Manager() *EC2Manager {
     return &EC2Manager{
-        CredentialsPath: cp,
-        InstanceID: id,
-        Region: rg,
-        Profile: pf,
-        Port: p,
-        Timeout: to,
+        publicDnsName: "",
+        appState: StateObscure,
     }
+}
+
+func NewEC2Manager(cp, id, rg, pf string, p uint16, to int) *EC2Manager {
+    ec2 := newEC2Manager()
+    ec2.CredentialsPath = cp
+    ec2.InstanceId = id
+    ec2.Region = rg
+    ec2.Profile = pf
+    ec2.Port = p
+    ec2.Timeout = to
+    return ec2
+}
+
+func NewEC2ManagerJson(data []byte) (*EC2Manager, error) {
+    ec2 := newEC2Manager()
+    return ec2, json.Unmarshal(data, ec2)
 }
 
 func(ec2 *EC2Manager) newService() (*awsec2.EC2, error) {
@@ -62,7 +75,7 @@ func(ec2 *EC2Manager) newService() (*awsec2.EC2, error) {
 }
 
 func(ec2 *EC2Manager) instanceIds() []*string {
-    return []*string{aws.String(ec2.InstanceID)}
+    return []*string{aws.String(ec2.InstanceId)}
 }
 
 func(ec2 *EC2Manager) addr() string {
@@ -96,14 +109,13 @@ func(ec2 *EC2Manager) Start() error {
         for {
             conn, err := ec2.dial()
 
-            if err != nil {
-                ec2.appState = StatePending
-            } else {
+            if err == nil { // Connected
                 conn.Close()
                 ec2.appState = StateRunning
                 return
             }
 
+            ec2.appState = StatePending
             time.Sleep(EC2AppWatchInterval)
         }
 
@@ -150,6 +162,8 @@ func(ec2 *EC2Manager) State() (int, error) {
             case StateStopping:
                 return StateStopping, nil
             }
+            // State obscure and others
+            return StateObscure, nil
         }
         conn.Close()
 

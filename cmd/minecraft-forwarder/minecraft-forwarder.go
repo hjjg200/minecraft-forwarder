@@ -28,6 +28,7 @@ type (
         Stopped string `json:"stopped"`
         Pending string `json:"pending"`
         Stopping string `json:"stopping"`
+        Obscure string `json:"obscure"`
     }
 
     Config struct {
@@ -56,6 +57,7 @@ var DefaultConfig = Config{
         Stopped: "STOPPED\nAttempt login to start it up",
         Pending: "PENDING...",
         Stopping: "STOPPING...",
+        Obscure: "STATE OBSCURE",
     },
 
     Servers: []ServerConfig{
@@ -107,8 +109,8 @@ func main() {
         case "nop":
             m = manager.NewNopManager()
         case "ec2":
-            ec2 := &manager.EC2Manager{}
-            act.Try(json.Unmarshal(data, ec2))
+            ec2, err := manager.NewEC2ManagerJson(data)
+            act.Try(err)
             m = ec2
         default:
             panic("Unknown server forward type")
