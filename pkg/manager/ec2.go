@@ -13,10 +13,6 @@ import (
     awsec2 "github.com/aws/aws-sdk-go/service/ec2"
 )
 
-const (
-    EC2AppWatchInterval = time.Second * 5
-)
-
 // EC2
 type EC2Manager struct {
     CredentialsPath string `json:"credentialsPath"`
@@ -27,6 +23,7 @@ type EC2Manager struct {
     Timeout int `json:"timeout"` // unit: seconds
     publicDnsName string
     appState int
+    appTime time.Time
     lock sync.Mutex
 }
 
@@ -107,7 +104,9 @@ func(ec2 *EC2Manager) Start() error {
         ec2.appState = StateStopped
 
         for {
-            conn, err := ec2.dial()
+            after := time.After(ec2.timeout())
+            ec2.appTime = time.Now()
+            conn, err := ec2.Dial()
 
             if err == nil { // Connected
                 conn.Close()
@@ -116,7 +115,7 @@ func(ec2 *EC2Manager) Start() error {
             }
 
             ec2.appState = StatePending
-            time.Sleep(EC2AppWatchInterval)
+            <-after
         }
 
     }()
@@ -151,16 +150,14 @@ func(ec2 *EC2Manager) State() (int, error) {
     case 16: // EC2 running
         ec2.publicDnsName = *instance.PublicDnsName
         // Check underlying server
-        conn, err := ec2.dial()
+        now := time.Now()
+        conn, err := ec2.Dial()
         if err != nil {
             switch ec2.appState {
             case StateStopped, StatePending: // Currently pending
                 return StatePending, nil
             case StateRunning:
-                // Second check
-                conn2, err := ec2.dial()
-                if err == nil {
-                    conn2.Close()
+                if now.Before(ec2.appTime) {
                     return StateRunning, nil
                 }
                 ec2.appState = StateStopping
@@ -184,20 +181,10 @@ func(ec2 *EC2Manager) State() (int, error) {
 
 }
 
-func(ec2 *EC2Manager) dial() (net.Conn, error) {
-    return dialTimeout(ec2.addr(), time.Duration(ec2.Timeout) * time.Second)
+func(ec2 *EC2Manager) timeout() time.Duration {
+    return time.Duration(ec2.Timeout) * time.Second
 }
 
 func(ec2 *EC2Manager) Dial() (net.Conn, error) {
-
-    state, err := ec2.State()
-    if err != nil {
-        return nil, err
-    }
-    if state != StateRunning {
-        return nil, fmt.Errorf("Server is not running")
-    }
-
-    return ec2.dial()
-
+    return dialTimeout(ec2.addr(), ec2.timeout())
 }
