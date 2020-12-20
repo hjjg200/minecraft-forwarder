@@ -156,7 +156,13 @@ func(ec2 *EC2Manager) State() (int, error) {
             switch ec2.appState {
             case StateStopped, StatePending: // Currently pending
                 return StatePending, nil
-            case StateRunning: // Previously running
+            case StateRunning:
+                // Second check
+                conn2, err := ec2.dial()
+                if err == nil {
+                    conn2.Close()
+                    return StateRunning, nil
+                }
                 ec2.appState = StateStopping
                 return StateStopping, nil
             case StateStopping:

@@ -87,7 +87,7 @@ func main() {
         act.Try(err)
 
         enc := json.NewEncoder(cfgfile)
-        enc.SetIndent("", " ")
+        enc.SetIndent("", "  ")
         act.Try(enc.Encode(DefaultConfig))
 
         appConfig = DefaultConfig
