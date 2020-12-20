@@ -105,8 +105,9 @@ func(ec2 *EC2Manager) Start() error {
 
         for {
             after := time.After(ec2.timeout())
-            ec2.appTime = time.Now()
+
             conn, err := ec2.Dial()
+            ec2.appTime = time.Now()
 
             if err == nil { // Connected
                 conn.Close()
@@ -150,14 +151,14 @@ func(ec2 *EC2Manager) State() (int, error) {
     case 16: // EC2 running
         ec2.publicDnsName = *instance.PublicDnsName
         // Check underlying server
-        now := time.Now()
+        start := time.Now()
         conn, err := ec2.Dial()
         if err != nil {
             switch ec2.appState {
             case StateStopped, StatePending: // Currently pending
                 return StatePending, nil
             case StateRunning:
-                if now.Before(ec2.appTime) {
+                if start.Before(ec2.appTime) {
                     return StateRunning, nil
                 }
                 ec2.appState = StateStopping
