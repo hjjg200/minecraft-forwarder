@@ -75,7 +75,7 @@ func(ec2 *EC2Manager) instanceIds() []*string {
     return []*string{aws.String(ec2.InstanceId)}
 }
 
-func(ec2 *EC2Manager) addr() string {
+func(ec2 *EC2Manager) Addr() string {
     portstr := fmt.Sprintf("%d", ec2.Port)
     return net.JoinHostPort(ec2.publicDnsName, portstr)
 }
@@ -187,5 +187,5 @@ func(ec2 *EC2Manager) timeout() time.Duration {
 }
 
 func(ec2 *EC2Manager) Dial() (net.Conn, error) {
-    return dialTimeout(ec2.addr(), ec2.timeout())
+    return dialTimeout(ec2.Addr(), ec2.timeout())
 }

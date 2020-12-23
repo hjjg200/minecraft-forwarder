@@ -19,6 +19,7 @@ const (
 type Manager interface {
     Start() error
     State() (int, error)
+    Addr() string
     Dial() (net.Conn, error)
 }
 

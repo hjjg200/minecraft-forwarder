@@ -65,6 +65,9 @@ var DefaultConfig = Config{
             Name: "example.com",
             Aliases: []string{"mc.example.com"},
             Port: 25565,
+            Forward: map[string] interface{}{
+                "type": "nop",
+            },
         },
     },
 
@@ -127,9 +130,10 @@ func main() {
         go func(addr string) {
 
             handler := packet.HandlerFunc(func(src net.Conn, hs packet.Handshake) {
+
                 // Catch panic
                 defer act.Catch(func(err error) {
-                    fmt.Println(act.Stack(), err)
+                    fmt.Println(err, act.Stack())
                 })
 
                 // Find matching server config
@@ -150,6 +154,7 @@ Loop:
 
                 if server == nil {
                     src.Close()
+                    fmt.Println("No server was found for", hs.Address)
                     return
                 }
 
@@ -160,22 +165,44 @@ Loop:
                 state, err := m.State()
                 act.Try(err)
 
+                // Handle each state
+                respond := func(msg, color string) {
+                    packet.ServeResponse(src, hs, packet.Response{
+                        Version: packet.VersionStruct{
+                            Name: "",
+                            Protocol: -1,
+                        },
+                        Description: packet.Chat{
+                            ChatElem: packet.ChatElem{
+                                Text: msg,
+                                Color: color,
+                            },
+                        },
+                    })
+                }
                 switch state {
                 case manager.StateStopped:
                     if hs.NextState == packet.StateLogin {
                         act.Try(m.Start())
+                        src.Close()
+                        return
                     }
-                    packet.ServeResponse(src, hs, simpleResponse(appConfig.Messages.Stopped, "red"))
+                    respond(appConfig.Messages.Stopped, "red")
+                    return
                 case manager.StatePending:
-                    packet.ServeResponse(src, hs, simpleResponse(appConfig.Messages.Pending, "gold"))
+                    respond(appConfig.Messages.Pending, "gold")
+                    return
                 case manager.StateRunning:
                     dst, err := m.Dial()
                     act.Try(err)
                     packet.Forward(src, hs, dst)
+                    return
                 case manager.StateStopping:
-                    packet.ServeResponse(src, hs, simpleResponse(appConfig.Messages.Stopping, "red"))
-                default:
+                    respond(appConfig.Messages.Stopping, "red")
+                    return
                 }
+
+                respond(appConfig.Messages.Obscure, "gray")
 
             })
 
@@ -187,16 +214,6 @@ Loop:
 
     wg.Wait()
 
-}
-
-func simpleResponse(msg, color string) packet.Response {
-    return packet.Response{
-        Version: packet.VersionStruct{
-            Name: "",
-            Protocol: -1,
-        },
-        Description: packet.ColoredChat(msg, color),
-    }
 }
 
 func(scfg ServerConfig) uuid() string {

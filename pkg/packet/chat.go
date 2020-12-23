@@ -23,10 +23,3 @@ func(c Chat) String() string {
     }
     return t
 }
-
-func ColoredChat(msg, clr string) Chat {
-    var c Chat
-    c.Text = msg
-    c.Color = clr
-    return c
-}

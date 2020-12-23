@@ -6,6 +6,7 @@ import (
     "io"
     "net"
     "strconv"
+    "sync"
     "time"
 
     "github.com/hjjg200/act"
@@ -27,11 +28,11 @@ type Handshake struct {
     NextState int32
 }
 
-func ReadHandshake(conn net.Conn) (hs Handshake, err error) {
+func ReadHandshake(rd io.Reader) (hs Handshake, err error) {
 
     defer act.CatchAndStore(&err)
 
-    pr := NewPacketReader(IDHandshake, conn)
+    pr := NewPacketReader(IDHandshake, rd)
 
     hs.Protocol = pr.NextVarInt()
     hs.Address = pr.NextString()
@@ -59,11 +60,11 @@ func(hs Handshake) Bytes() []byte {
 type Request struct {
 }
 
-func ReadRequest(conn net.Conn) (req Request, err error) {
+func ReadRequest(rd io.Reader) (req Request, err error) {
 
     defer act.CatchAndStore(&err)
 
-    NewPacketReader(IDStatusSLP, conn)
+    NewPacketReader(IDStatusSLP, rd)
 
     return req, nil
 
@@ -99,11 +100,11 @@ type (
     }
 )
 
-func ReadResponse(conn net.Conn) (rsp Response, err error) {
+func ReadResponse(rd io.Reader) (rsp Response, err error) {
 
     defer act.CatchAndStore(&err)
 
-    pr := NewPacketReader(IDHandshake, conn)
+    pr := NewPacketReader(IDHandshake, rd)
 
     js := pr.NextString()
     err = json.Unmarshal([]byte(js), &rsp)
@@ -178,11 +179,11 @@ type PingPong struct {
     Payload int64
 }
 
-func ReadPingPong(conn net.Conn) (pp PingPong, err error) {
+func ReadPingPong(rd io.Reader) (pp PingPong, err error) {
 
     defer act.CatchAndStore(&err)
 
-    pr := NewPacketReader(IDStatusPingPong, conn)
+    pr := NewPacketReader(IDStatusPingPong, rd)
 
     pp.Payload = pr.NextInt(8)
 
@@ -209,18 +210,24 @@ func(hf HandlerFunc) Serve(conn net.Conn, hs Handshake) {
     hf(conn, hs)
 }
 
+// Handlers expect only the Handshake part was read
 func Forward(src net.Conn, hs Handshake, dst net.Conn) {
+
+    var wg sync.WaitGroup
+    wg.Add(2)
 
     conncopy := func(to, from net.Conn) {
         defer from.Close()
         defer to.Close()
         io.Copy(to, from)
+        wg.Done()
     }
 
     dst.Write(hs.Bytes())
 
     go conncopy(src, dst)
     go conncopy(dst, src)
+    wg.Wait()
 
 }
 
@@ -240,6 +247,7 @@ func ServeResponse(src net.Conn, hs Handshake, rsp Response) {
     act.Try(err)
 
     src.Write(pp0.Bytes())
+    src.Close()
 
 }
 

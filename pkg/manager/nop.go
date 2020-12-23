@@ -3,7 +3,6 @@ package manager
 import (
     "fmt"
     "net"
-    "time"
 )
 
 var ErrNop = fmt.Errorf("Nop")
@@ -23,10 +22,10 @@ func(nop *NopManager) State() (int, error) {
     return StateObscure, ErrNop
 }
 
-func(nop *NopManager) Dial() (net.Conn, error) {
-    return nil, ErrNop
+func(nop *NopManager) Addr() string {
+    return ""
 }
 
-func(nop *NopManager) DialTimeout(timeout time.Duration) (net.Conn, error) {
+func(nop *NopManager) Dial() (net.Conn, error) {
     return nil, ErrNop
 }
