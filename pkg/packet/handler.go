@@ -47,6 +47,9 @@ func ServeDisconnect(src net.Conn, hs Handshake, reason Chat) {
         return
     }
 
+    start, _ := ReadLoginStart(src)
+    fmt.Println("NAME:", start.Name)
+
     src.Write(Disconnect{reason}.Bytes())
     src.Close()
 

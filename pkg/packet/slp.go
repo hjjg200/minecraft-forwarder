@@ -15,6 +15,7 @@ const (
     IDHandshake = 0x00
     IDStatusSLP = 0x00
     IDStatusPingPong = 0x01
+    IDLoginStart = 0x00
     IDLoginDisconnect = 0x00
     StateStatus = 1
     StateLogin = 2
@@ -201,7 +202,33 @@ func(pp PingPong) Bytes() []byte {
 
 }
 
-// Login - disconnect
+// Login - start (server-bound)
+type LoginStart struct {
+    Name string
+}
+
+func ReadLoginStart(rd io.Reader) (start LoginStart, err error) {
+
+    defer act.CatchAndStore(&err)
+
+    pr := NewPacketReader(IDLoginStart, rd)
+    start.Name = pr.NextString()
+
+    return start, nil
+
+}
+
+func(start LoginStart) Bytes() []byte {
+
+    pk := NewPacket(IDLoginStart)
+
+    pk.PutString(start.Name)
+
+    return pk.Bytes()
+
+}
+
+// Login - disconnect (client-bound)
 type Disconnect struct {
     Reason Chat
 }
