@@ -3,6 +3,7 @@ package main
 import (
     "encoding/json"
     "fmt"
+    "io"
     "io/ioutil"
     "net"
     "os"
@@ -29,6 +30,8 @@ type (
         Pending string `json:"pending"`
         Stopping string `json:"stopping"`
         Obscure string `json:"obscure"`
+        Started string `json:"started"`
+        StartFailed string `json:"startFailed"`
     }
 
     Config struct {
@@ -58,6 +61,8 @@ var DefaultConfig = Config{
         Pending: "PENDING...",
         Stopping: "STOPPING...",
         Obscure: "STATE OBSCURE",
+        Started: "Successfully started the server!",
+        StartFailed: "Failed to start the server!",
     },
 
     Servers: []ServerConfig{
@@ -133,6 +138,9 @@ func main() {
 
                 // Catch panic
                 defer act.Catch(func(err error) {
+                    if err == io.EOF {
+                        return
+                    }
                     fmt.Println(err, act.Stack())
                 })
 
@@ -183,8 +191,15 @@ Loop:
                 switch state {
                 case manager.StateStopped:
                     if hs.NextState == packet.StateLogin {
-                        act.Try(m.Start())
-                        src.Close()
+                        var c packet.Chat
+                        if m.Start() != nil {
+                            c.Text = appConfig.Messages.StartFailed
+                            c.Color = "red"
+                        } else {
+                            c.Text = appConfig.Messages.Started
+                            c.Color = "green"
+                        }
+                        packet.ServeDisconnect(src, hs, c)
                         return
                     }
                     respond(appConfig.Messages.Stopped, "red")

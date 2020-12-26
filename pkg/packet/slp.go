@@ -6,7 +6,6 @@ import (
     "io"
     "net"
     "strconv"
-    "sync"
     "time"
 
     "github.com/hjjg200/act"
@@ -16,6 +15,7 @@ const (
     IDHandshake = 0x00
     IDStatusSLP = 0x00
     IDStatusPingPong = 0x01
+    IDLoginDisconnect = 0x00
     StateStatus = 1
     StateLogin = 2
 )
@@ -201,84 +201,28 @@ func(pp PingPong) Bytes() []byte {
 
 }
 
-// Handler
-type Handler interface {
-    Serve(net.Conn, Handshake)
-}
-type HandlerFunc func(net.Conn, Handshake)
-func(hf HandlerFunc) Serve(conn net.Conn, hs Handshake) {
-    hf(conn, hs)
+// Login - disconnect
+type Disconnect struct {
+    Reason Chat
 }
 
-// Handlers expect only the Handshake part was read
-func Forward(src net.Conn, hs Handshake, dst net.Conn) {
+func ReadDisconnect(rd io.Reader) (dc Disconnect, err error) {
 
-    var wg sync.WaitGroup
-    wg.Add(2)
+    defer act.CatchAndStore(&err)
 
-    conncopy := func(to, from net.Conn) {
-        defer from.Close()
-        defer to.Close()
-        io.Copy(to, from)
-        wg.Done()
-    }
+    pr := NewPacketReader(IDLoginDisconnect, rd)
+    dc.Reason, err = ReadChat(pr)
 
-    dst.Write(hs.Bytes())
-
-    go conncopy(src, dst)
-    go conncopy(dst, src)
-    wg.Wait()
+    return dc, err
 
 }
 
-func ServeResponse(src net.Conn, hs Handshake, rsp Response) {
+func(dc Disconnect) Bytes() []byte {
 
-    if hs.NextState != StateStatus {
-        src.Close()
-        return
-    }
+    pk := NewPacket(IDLoginDisconnect)
 
-    _, err := ReadRequest(src)
-    act.Try(err)
+    pk.PutString(string(dc.Reason.Bytes()))
 
-    src.Write(rsp.Bytes())
-
-    pp0, err := ReadPingPong(src)
-    act.Try(err)
-
-    src.Write(pp0.Bytes())
-    src.Close()
+    return pk.Bytes()
 
 }
-
-func ListenAndServe(addr string, handler Handler) error {
-
-    ln, err := net.Listen("tcp", addr)
-    if err != nil {
-        return err
-    }
-
-    for {
-
-        conn, err := ln.Accept()
-        if err != nil {
-            fmt.Println("Connection exception:", err)
-        }
-
-        go func(src net.Conn) {
-
-            hs, err := ReadHandshake(src)
-            if err != nil {
-                return
-            }
-
-            handler.Serve(src, hs)
-
-        }(conn)
-
-    }
-
-    return fmt.Errorf("Server stopped")
-
-}
-

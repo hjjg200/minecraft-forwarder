@@ -1,5 +1,9 @@
 package packet
 
+import (
+    "encoding/json"
+)
+
 type ChatElem struct {
     Text string `json:"text"`
     Italic bool `json:"italic"`
@@ -15,6 +19,13 @@ type Chat struct {
     Extra []ChatElem `json:"Extra"`
 }
 
+func ReadChat(pr *PacketReader) (Chat, error) {
+    data := pr.NextString()
+    var c Chat
+    err := json.Unmarshal([]byte(data), &c)
+    return c, err
+}
+
 func(c Chat) String() string {
     t := ""
     t += c.Text
@@ -22,4 +33,12 @@ func(c Chat) String() string {
         t += sib.Text
     }
     return t
+}
+
+func(c Chat) Bytes() []byte {
+    p, err := json.Marshal(c)
+    if err != nil {
+        return []byte{}
+    }
+    return p
 }
